@@ -4,7 +4,8 @@
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
-			"outputs": [".eve/**", ".output/**", ".vercel/output/**"]
+			"outputs": [".eve/**", ".output/**", ".vercel/output/**"],
+			"env": ["NITRO_PRESET"]
 		},
 		"check-types": {
 			"dependsOn": ["topo", "^build"]
