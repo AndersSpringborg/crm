@@ -39,7 +39,8 @@ ENV NITRO_PRESET=node-server
 RUN --mount=type=cache,target=/root/.bun/install/cache \
 	bunx turbo run build --filter=agent \
 	&& rm -rf node_modules apps/*/node_modules packages/*/node_modules \
-	&& bun install --frozen-lockfile --ignore-scripts --filter=agent
+	&& bun install --frozen-lockfile --ignore-scripts --filter=agent \
+	&& cd apps/agent && CRM_TELEMETRY_DISABLED=1 node scripts/prewarm-sandboxes.ts
 
 FROM oven/bun:${BUN_VERSION}-slim AS runtime
 WORKDIR /repo
@@ -67,6 +68,10 @@ COPY --from=agent-node /usr/local/bin/node /usr/local/bin/node
 COPY --from=agent-build --chown=bun:bun /repo /repo
 USER bun
 ENV PORT=2000
+ENV HOST=0.0.0.0
 EXPOSE 2000
 WORKDIR /repo/apps/agent
-CMD ["bun", "run", "start"]
+# Not `eve start`: it prewarms the sandbox in its own process and then keeps
+# that process, and its 3 GB, alive next to the server. The template is
+# prewarmed at build instead (scripts/prewarm-sandboxes.ts).
+CMD ["node", ".output/server/index.mjs"]
