@@ -12,6 +12,22 @@ export const DEFAULT_AGENT_MODEL = {
 	contextWindowTokens: 1_000_000,
 } as const;
 
+/** OpenRouter names models differently, so it needs its own default. */
+export const OPENROUTER_DEFAULT_AGENT_MODEL = {
+	id: "z-ai/glm-5.3-flash",
+	contextWindowTokens: 1_048_576,
+} as const;
+
+export function openRouterApiKey(): string | null {
+	return process.env.OPENROUTER_API_KEY?.trim() || null;
+}
+
+export function defaultAgentModel() {
+	return openRouterApiKey()
+		? OPENROUTER_DEFAULT_AGENT_MODEL
+		: DEFAULT_AGENT_MODEL;
+}
+
 export interface AgentModelSetting {
 	id: string;
 	contextWindowTokens: number;
@@ -24,14 +40,16 @@ export async function readAgentModel(db: Db): Promise<AgentModelSetting> {
 		select: { agentModelId: true, agentModelContextWindow: true },
 	});
 
+	const fallback = defaultAgentModel();
+
 	if (!row?.agentModelId) {
-		return { ...DEFAULT_AGENT_MODEL, isDefault: true };
+		return { ...fallback, isDefault: true };
 	}
 
 	return {
 		id: row.agentModelId,
 		contextWindowTokens:
-			row.agentModelContextWindow ?? DEFAULT_AGENT_MODEL.contextWindowTokens,
+			row.agentModelContextWindow ?? fallback.contextWindowTokens,
 		isDefault: false,
 	};
 }

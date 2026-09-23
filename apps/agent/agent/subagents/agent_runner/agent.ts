@@ -2,7 +2,35 @@ import { db } from "@crm/db";
 import { DEFAULT_AGENT_MODEL } from "@crm/db/settings";
 import { defineAgent, defineDynamic } from "eve";
 import { z } from "zod";
-import { attribute, purposeOf } from "../../lib/session-purpose";
+import { type ModelSelection, openRouterModel } from "../../lib/model";
+import {
+	attribute,
+	type PurposeContext,
+	purposeOf,
+} from "../../lib/session-purpose";
+
+async function versionModel(
+	ctx: PurposeContext,
+): Promise<ModelSelection | null> {
+	if (purposeOf(ctx) !== "team-agent") return null;
+	const runId = attribute(ctx, "runId");
+	if (!runId) return null;
+
+	const run = await db.agentRun.findUnique({
+		where: { id: runId },
+		select: {
+			version: {
+				select: { modelId: true, modelContextWindowTokens: true },
+			},
+		},
+	});
+	return run
+		? {
+				model: run.version.modelId,
+				modelContextWindowTokens: run.version.modelContextWindowTokens,
+			}
+		: null;
+}
 
 export default defineAgent({
 	description:
@@ -10,26 +38,9 @@ export default defineAgent({
 	model: defineDynamic({
 		fallback: DEFAULT_AGENT_MODEL.id,
 		events: {
-			"session.started": async (_event, ctx) => {
-				if (purposeOf(ctx) !== "team-agent") return null;
-				const runId = attribute(ctx, "runId");
-				if (!runId) return null;
-
-				const run = await db.agentRun.findUnique({
-					where: { id: runId },
-					select: {
-						version: {
-							select: { modelId: true, modelContextWindowTokens: true },
-						},
-					},
-				});
-				return run
-					? {
-							model: run.version.modelId,
-							modelContextWindowTokens: run.version.modelContextWindowTokens,
-						}
-					: null;
-			},
+			"session.started": (_event, ctx) => versionModel(ctx),
+			"step.started": async (_event, ctx) =>
+				openRouterModel(await versionModel(ctx)),
 		},
 	}),
 	outputSchema: z.object({

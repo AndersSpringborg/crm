@@ -10,11 +10,12 @@ import {
 import { db, type Prisma } from "@crm/db";
 import {
 	DEFAULT_AGENT_MODEL,
+	OPENROUTER_DEFAULT_AGENT_MODEL,
 	readAgentModel,
 	SETTINGS_ID,
 	writeAgentModel,
 } from "@crm/db/settings";
-import { selectedModel } from "../agent/lib/model";
+import { openRouterModel, selectedModel } from "../agent/lib/model";
 
 async function clear() {
 	await db.appSetting.deleteMany({ where: { id: SETTINGS_ID } });
@@ -77,5 +78,56 @@ describe("the configured model", () => {
 
 		expect(await db.appSetting.count()).toBe(1);
 		expect((await readAgentModel(db)).id).toBe("zai/glm-5.2");
+	});
+});
+
+describe("the model on OpenRouter", () => {
+	const savedKey = process.env.OPENROUTER_API_KEY;
+
+	beforeEach(() => {
+		process.env.OPENROUTER_API_KEY = "sk-or-v1-test";
+	});
+
+	afterEach(() => {
+		if (savedKey === undefined) delete process.env.OPENROUTER_API_KEY;
+		else process.env.OPENROUTER_API_KEY = savedKey;
+	});
+
+	it("leaves the gateway in charge when there is no key", async () => {
+		delete process.env.OPENROUTER_API_KEY;
+
+		expect(await openRouterModel()).toBeNull();
+	});
+
+	it("runs the OpenRouter default when nothing has been chosen", async () => {
+		const selection = await openRouterModel();
+
+		expect(selection?.model.provider).toBe("openrouter.chat");
+		expect(selection?.model.modelId).toBe(OPENROUTER_DEFAULT_AGENT_MODEL.id);
+		expect(selection?.modelContextWindowTokens).toBe(
+			OPENROUTER_DEFAULT_AGENT_MODEL.contextWindowTokens,
+		);
+	});
+
+	it("runs the model chosen in settings", async () => {
+		await writeAgentModel(db, {
+			id: "deepseek/deepseek-v4.1-flash",
+			contextWindowTokens: 1_048_576,
+		});
+
+		const selection = await openRouterModel();
+
+		expect(selection?.model.modelId).toBe("deepseek/deepseek-v4.1-flash");
+		expect(selection?.modelContextWindowTokens).toBe(1_048_576);
+	});
+
+	it("runs a model pinned elsewhere, such as a team agent's version", async () => {
+		const selection = await openRouterModel({
+			model: "qwen/qwen3.7-flash",
+			modelContextWindowTokens: 1_000_000,
+		});
+
+		expect(selection?.model.modelId).toBe("qwen/qwen3.7-flash");
+		expect(selection?.modelContextWindowTokens).toBe(1_000_000);
 	});
 });

@@ -1,6 +1,6 @@
 import type { Db } from "@crm/db";
 import {
-	DEFAULT_AGENT_MODEL,
+	defaultAgentModel,
 	maskKey,
 	readAgentModel,
 	readArchiveRetentionDays,
@@ -41,7 +41,7 @@ export class SettingsService {
 		return {
 			selectedId: model.isDefault ? null : model.id,
 			effectiveId: model.id,
-			defaultId: DEFAULT_AGENT_MODEL.id,
+			defaultId: defaultAgentModel().id,
 			effective: await this.catalog.find(model.id),
 			updatedAt: row?.updatedAt.toISOString() ?? null,
 		};
