@@ -135,6 +135,40 @@ DATABASE_URL="…" bunx prisma migrate diff \
   --from-config-datasource --to-schema prisma/schema.prisma --script
 ```
 
+## Docker images
+
+Every push to `release` publishes three images to GitHub Container Registry, from
+the one root `Dockerfile`. `.github/workflows/docker.yml` builds them.
+
+| Image | Port | Build target |
+| --- | --- | --- |
+| `ghcr.io/<owner>/crm-api` | 3001 | `api` |
+| `ghcr.io/<owner>/crm-app` | 3000 | `app` |
+| `ghcr.io/<owner>/crm-agent` | 2000 | `agent` |
+
+Each image gets three tags: `latest`, the root `package.json` version, and
+`sha-<commit>`.
+
+```sh
+docker build --target api -t crm-api .
+docker build --target app --build-arg NEXT_PUBLIC_API_URL=https://api.example.com -t crm-app .
+docker build --target agent -t crm-agent .
+```
+
+- **The API URL is fixed when the app image is built.** `next.config.ts` inlines
+  `NEXT_PUBLIC_API_URL` into the server and the browser bundle. `API_URL` on the
+  app container does not move its requests. The workflow reads the repository variable
+  `NEXT_PUBLIC_API_URL` and falls back to `http://localhost:3001`. A different
+  API host needs its own app image.
+- **The api container applies migrations when it starts**, with
+  `prisma migrate deploy`, before it listens. Start the api before the agent and
+  the app. Otherwise they briefly read tables that do not exist yet.
+- **Never publish the agent port to the internet.** `localDev()` in
+  `agent/channels/eve.ts` accepts any request whose `Host` is `localhost`.
+  Keep the agent on a private network, reachable only from the app and the api.
+- Runtime configuration is the same as everywhere else: the variables in
+  `.env.example`, passed with `-e` or `--env-file`. The images hold no `.env`.
+
 ## Secrets hygiene
 
 `.gitignore` ignores `.env` and `.env.*` with one negation for `.env.example`, so
